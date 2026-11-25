@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState } from "react";
+import Image from "next/image";
 import { useRouter } from "next/navigation";
 import {
   ArrowLeft,
@@ -54,6 +55,12 @@ const quickProducts = [
   { name: "Pomodori", days: 5, place: "Frigo", icon: Leaf, tone: "rose" },
   { name: "Patate", days: 20, place: "Dispensa", icon: Package, tone: "sand" },
   { name: "Banane", days: 5, place: "Dispensa", icon: Leaf, tone: "yellow" },
+];
+
+const storagePlaces = [
+  { label: "Frigo", icon: IceCreamBowl },
+  { label: "Dispensa", icon: Package },
+  { label: "Freezer", icon: Snowflake },
 ];
 
 const recipes = [
@@ -227,6 +234,74 @@ const recipes = [
     image: "https://images.unsplash.com/photo-1598259298632-e785684cfa90?auto=format&fit=crop&w=1200&q=85",
     imageAlt: "Ciotola di yogurt con banana e frutta",
   },
+  {
+    id: 11,
+    title: "Risotto cremoso alle zucchine",
+    time: "28 min",
+    required: ["riso", "zucchin"],
+    ingredients: "Riso · Zucchine",
+    ingredientList: ["160 g di riso", "2 zucchine", "Brodo o acqua calda", "Olio, sale e pepe"],
+    note: "Una combinazione semplice e delicata",
+    servings: "2 persone",
+    steps: [
+      "Taglia le zucchine a rondelle sottili e falle ammorbidire in casseruola con poco olio.",
+      "Aggiungi il riso, tostalo per due minuti e versa il brodo caldo poco alla volta.",
+      "Porta a cottura mescolando e completa con pepe e un filo d’olio.",
+    ],
+    image: "/recipes/risotto-zucchine.webp",
+    imageAlt: "Risotto cremoso con rondelle di zucchine",
+  },
+  {
+    id: 12,
+    title: "Frittata rustica di patate",
+    time: "30 min",
+    required: ["patat", "uova"],
+    ingredients: "Patate · Uova",
+    ingredientList: ["400 g di patate", "4 uova", "Olio extravergine", "Sale, pepe ed erbe"],
+    note: "Trasforma due ingredienti in un piatto unico",
+    servings: "2 persone",
+    steps: [
+      "Taglia le patate a fettine sottili e cuocile in padella con poco olio e il coperchio.",
+      "Sbatti le uova con sale, pepe ed erbe, poi versale sulle patate morbide.",
+      "Cuoci a fuoco dolce, gira la frittata e termina la doratura dall’altro lato.",
+    ],
+    image: "/recipes/frittata-patate.webp",
+    imageAlt: "Frittata dorata con patate in una padella",
+  },
+  {
+    id: 13,
+    title: "Pasta al pomodoro e mozzarella",
+    time: "22 min",
+    required: ["pasta", "pomodor", "mozzarella"],
+    ingredients: "Pasta corta · Pomodori · Mozzarella",
+    ingredientList: ["160 g di pasta corta", "2 pomodori maturi", "125 g di mozzarella", "Olio, sale e basilico"],
+    note: "Usa insieme tre ingredienti freschi",
+    servings: "2 persone",
+    steps: [
+      "Taglia i pomodori e cuocili in padella con olio e sale fino a ottenere un sugo veloce.",
+      "Cuoci la pasta al dente, scolala e saltala per un minuto nel sugo.",
+      "Spegni il fuoco, aggiungi la mozzarella a pezzetti e mescola finché diventa filante.",
+    ],
+    image: "/recipes/pasta-pomodoro-mozzarella.webp",
+    imageAlt: "Pasta corta con pomodoro, mozzarella e basilico",
+  },
+  {
+    id: 14,
+    title: "Pane tostato con uova e pomodoro",
+    time: "15 min",
+    required: ["pane", "uova", "pomodor"],
+    ingredients: "Pane integrale · Uova · Pomodori",
+    ingredientList: ["4 fette di pane integrale", "3 uova", "2 pomodori", "Olio, sale e pepe"],
+    note: "Una cena veloce con quello che hai",
+    servings: "2 persone",
+    steps: [
+      "Tosta il pane in padella o in forno finché diventa croccante.",
+      "Cuoci le uova strapazzate a fuoco dolce, lasciandole morbide.",
+      "Distribuisci le uova sul pane e completa con pomodori a cubetti, olio e pepe.",
+    ],
+    image: "/recipes/pane-uova-pomodoro.webp",
+    imageAlt: "Pane tostato con uova morbide e pomodoro fresco",
+  },
 ];
 
 function daysUntil(date) {
@@ -333,27 +408,38 @@ function App({ currentUser, initialEvents, initialProducts }) {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [selected, setSelected] = useState(null);
   const [editingExpiry, setEditingExpiry] = useState(false);
+  const [expiryDraft, setExpiryDraft] = useState("");
   const [editingQuantity, setEditingQuantity] = useState(false);
   const [quantityDraft, setQuantityDraft] = useState("");
   const [selectedRecipe, setSelectedRecipe] = useState(null);
   const [query, setQuery] = useState("");
   const [quantity, setQuantity] = useState("");
   const [expiryDate, setExpiryDate] = useState("");
+  const [pendingProduct, setPendingProduct] = useState(null);
+  const [selectedPlace, setSelectedPlace] = useState(null);
   const [sessionAdded, setSessionAdded] = useState([]);
   const [toast, setToast] = useState(null);
   const [alertDays, setAlertDays] = useState(currentUser.alertDays);
   const [dailyLimit, setDailyLimit] = useState(currentUser.dailyLimit);
   const [quietHours, setQuietHours] = useState(currentUser.quietHours);
+  const [notificationPermission, setNotificationPermission] = useState("unknown");
   const [history, setHistory] = useState(() => initialEvents.map(hydrateEvent));
 
-  const urgentCount = products.filter((product) => daysUntil(product.expires) <= 2).length;
+  const alertThreshold = Number(alertDays) || 2;
+  const alertProducts = useMemo(
+    () => [...products]
+      .filter((product) => daysUntil(product.expires) <= alertThreshold)
+      .sort((a, b) => new Date(a.expires) - new Date(b.expires)),
+    [products, alertThreshold],
+  );
+  const urgentCount = alertProducts.length;
   const savedCount = history.filter((item) => item.action === "Salvato").length;
   const filteredProducts = useMemo(() => {
     const sorted = [...products].sort((a, b) => new Date(a.expires) - new Date(b.expires));
     if (filter === "Tutti") return sorted;
-    if (filter === "In scadenza") return sorted.filter((product) => daysUntil(product.expires) <= 2);
+    if (filter === "In scadenza") return sorted.filter((product) => daysUntil(product.expires) <= alertThreshold);
     return sorted.filter((product) => product.place === filter);
-  }, [products, filter]);
+  }, [products, filter, alertThreshold]);
 
   const quickResults = quickProducts.filter((product) =>
     product.name.toLowerCase().includes(query.toLowerCase()),
@@ -365,7 +451,49 @@ function App({ currentUser, initialEvents, initialProducts }) {
     return () => window.clearTimeout(timeout);
   }, [toast]);
 
+  useEffect(() => {
+    setNotificationPermission(
+      "Notification" in window ? window.Notification.permission : "unsupported",
+    );
+  }, []);
+
+  useEffect(() => {
+    if (notificationPermission !== "granted" || alertProducts.length === 0) return;
+    const now = new Date();
+    const hour = now.getHours() + now.getMinutes() / 60;
+    if (quietHours && (hour >= 22.5 || hour < 7)) return;
+
+    const today = dateInputValue(now);
+    alertProducts.forEach((product) => {
+      const sessionKey = `dispensa-notification-session:${product.id}:${today}`;
+      const dailyKey = `dispensa-notification-day:${product.id}`;
+      if (window.sessionStorage.getItem(sessionKey)) return;
+      if (dailyLimit && window.localStorage.getItem(dailyKey) === today) return;
+
+      const notification = new window.Notification(`Scadenza: ${product.name}`, {
+        body: `${expiryCopy(product.expires)} · ${product.place}`,
+        tag: `dispensa-expiry-${product.id}`,
+      });
+      notification.onclick = () => window.focus();
+      window.sessionStorage.setItem(sessionKey, "sent");
+      if (dailyLimit) window.localStorage.setItem(dailyKey, today);
+    });
+  }, [alertProducts, dailyLimit, notificationPermission, quietHours]);
+
+  async function enableNotifications() {
+    if (!("Notification" in window)) {
+      setNotificationPermission("unsupported");
+      return;
+    }
+    const permission = await window.Notification.requestPermission();
+    setNotificationPermission(permission);
+  }
+
   async function addProduct(item) {
+    if (!selectedPlace) {
+      setToast({ type: "duplicate", message: "Scegli Frigo, Dispensa o Freezer." });
+      return;
+    }
     const existing = products.find(
       (product) => product.name.toLowerCase() === item.name.toLowerCase(),
     );
@@ -379,7 +507,7 @@ function App({ currentUser, initialEvents, initialProducts }) {
     const result = await createPantryItemAction({
       name: item.name,
       quantity: quantity.trim(),
-      place: item.place,
+      place: selectedPlace,
       expiresAt: expires,
       iconKey: iconKeyFor(item.icon),
       tone: item.tone,
@@ -398,6 +526,10 @@ function App({ currentUser, initialEvents, initialProducts }) {
     });
     setQuantity("");
     setExpiryDate("");
+    setPendingProduct(null);
+    setSelectedPlace(null);
+    setQuery("");
+    setFilter("Tutti");
   }
 
   async function undoAdd() {
@@ -455,19 +587,23 @@ function App({ currentUser, initialEvents, initialProducts }) {
     setQuery("");
     setQuantity("");
     setExpiryDate("");
+    setPendingProduct(null);
+    setSelectedPlace(null);
     setSessionAdded([]);
+    setFilter("Tutti");
   }
 
   function openProduct(product) {
     setEditingExpiry(false);
+    setExpiryDraft(dateInputValue(product.expires));
     setEditingQuantity(false);
     setQuantityDraft(product.meta === "Quantità non indicata" ? "" : product.meta);
     setSelected(product);
   }
 
-  async function updateExpiry(value) {
-    if (!value || !selected) return;
-    const expires = new Date(`${value}T12:00:00`).toISOString();
+  async function saveExpiry() {
+    if (!expiryDraft || !selected) return;
+    const expires = new Date(`${expiryDraft}T12:00:00`).toISOString();
     const result = await updatePantryItemAction(String(selected.id), { expiresAt: expires });
     if (!result.ok) {
       setToast({ type: "duplicate", message: result.error });
@@ -478,6 +614,8 @@ function App({ currentUser, initialEvents, initialProducts }) {
     setProducts((current) =>
       current.map((product) => product.id === selected.id ? updated : product),
     );
+    setEditingExpiry(false);
+    setToast({ type: "info", message: `Scadenza di ${selected.name} aggiornata.` });
   }
 
   async function saveQuantity() {
@@ -622,7 +760,7 @@ function App({ currentUser, initialEvents, initialProducts }) {
                   onClick={() => setSettingsOpen(true)}
                   aria-label="Apri notifiche"
                 >
-                  <Bell /><span />
+                  <Bell />{urgentCount > 0 && <span />}
                 </button>
                 <button className="primary-button" onClick={() => setAddOpen(true)}><Plus /> Aggiungi cibo</button>
               </div>
@@ -662,7 +800,7 @@ function App({ currentUser, initialEvents, initialProducts }) {
                       </span>
                     </button>
                     <div className="expiry-column">
-                      <span className={`expiry-badge ${expired ? "danger" : daysUntil(product.expires) <= 2 ? "soon" : ""}`}>
+                      <span className={`expiry-badge ${expired ? "danger" : daysUntil(product.expires) <= alertThreshold ? "soon" : ""}`}>
                         {expiryCopy(product.expires)}
                       </span>
                       {expired && (
@@ -719,74 +857,127 @@ function App({ currentUser, initialEvents, initialProducts }) {
               </div>
             )}
 
-            <label className="search-field">
-              <Search />
-              <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Cerca un prodotto…" autoFocus />
-              {query && <button onClick={() => setQuery("")} aria-label="Cancella ricerca"><X /></button>}
-            </label>
-
-            <label className="quantity-field">
-              <span>
-                <strong>Quantità</strong>
-                <small>Facoltativa · vale per il prossimo prodotto</small>
-              </span>
-              <input
-                value={quantity}
-                onChange={(event) => setQuantity(event.target.value)}
-                placeholder="es. 2 confezioni"
-                aria-label="Quantità del prossimo prodotto"
-              />
-            </label>
-
-            <label className="quantity-field expiry-entry-field">
-              <span>
-                <strong>Data di scadenza</strong>
-                <small>Facoltativa · sostituisce la stima automatica</small>
-              </span>
-              <input
-                type="date"
-                value={expiryDate}
-                onChange={(event) => setExpiryDate(event.target.value)}
-                aria-label="Data di scadenza del prossimo prodotto"
-              />
-            </label>
-
-            <div className="quick-heading">
-              <div><h3>{query ? "Risultati" : "I tuoi soliti"}</h3><p>Un tap e resta qui finché non hai finito.</p></div>
-              <span>{expiryDate ? `Scadenza: ${formatChosenDate(expiryDate)}` : "Scadenza stimata"}</span>
-            </div>
-
-            <div className="quick-grid">
-              {quickResults.map((product) => {
-                const exists = products.some((item) => item.name.toLowerCase() === product.name.toLowerCase());
-                return (
-                  <button className={`quick-card ${exists ? "already" : ""}`} key={product.name} onClick={() => addProduct(product)}>
-                    <ProductIcon product={product} size="small" />
-                    <span>
-                      <strong>{product.name}</strong>
-                      <small>
-                        {product.place} · {expiryDate
-                          ? `scade il ${formatChosenDate(expiryDate)}`
-                          : product.days > 100 ? "lunga durata" : `${product.days} giorni`}
-                      </small>
-                    </span>
-                    <span className="quick-plus">{exists ? <Check /> : <Plus />}</span>
-                  </button>
-                );
-              })}
-            </div>
-
-            {query && quickResults.length === 0 && (
-              <div className="empty-search">
-                <Search />
-                <h3>Nessun risultato per “{query}”</h3>
-                <p>Controlla il nome oppure aggiungilo come nuovo prodotto.</p>
-                <button className="secondary-button" onClick={() => addProduct({ name: query, days: 3, place: "Frigo", icon: Package, tone: "cream" })}>
-                  <Plus /> Aggiungi comunque
+            {pendingProduct ? (
+              <div className="add-confirmation">
+                <button
+                  className="back-button"
+                  onClick={() => {
+                    setPendingProduct(null);
+                    setSelectedPlace(null);
+                  }}
+                >
+                  <ArrowLeft /> Scegli un altro prodotto
                 </button>
+                <div className="confirmation-product">
+                  <ProductIcon product={pendingProduct} />
+                  <div>
+                    <p className="eyebrow">Prodotto da inserire</p>
+                    <h3>{pendingProduct.name}</h3>
+                  </div>
+                </div>
+
+                <fieldset className="place-field">
+                  <legend>Dove vuoi inserirlo?</legend>
+                  <p>Scegli una sezione per continuare.</p>
+                  <div className="place-options">
+                    {storagePlaces.map(({ label, icon: PlaceIcon }) => (
+                      <button
+                        type="button"
+                        role="radio"
+                        aria-checked={selectedPlace === label}
+                        className={selectedPlace === label ? "active" : ""}
+                        key={label}
+                        onClick={() => setSelectedPlace(label)}
+                      >
+                        <PlaceIcon />
+                        {label}
+                        {selectedPlace === label && <Check />}
+                      </button>
+                    ))}
+                  </div>
+                </fieldset>
+
+                <label className="quantity-field">
+                  <span>
+                    <strong>Quantità</strong>
+                    <small>Facoltativa</small>
+                  </span>
+                  <input
+                    value={quantity}
+                    onChange={(event) => setQuantity(event.target.value)}
+                    placeholder="es. 2 confezioni"
+                    aria-label="Quantità del prodotto"
+                  />
+                </label>
+
+                <label className="quantity-field expiry-entry-field">
+                  <span>
+                    <strong>Data di scadenza</strong>
+                    <small>Facoltativa · sostituisce la stima automatica</small>
+                  </span>
+                  <div className="expiry-picker">
+                    <input
+                      type="date"
+                      min={dateInputValue(new Date())}
+                      value={expiryDate}
+                      onChange={(event) => setExpiryDate(event.target.value)}
+                      onClick={(event) => event.currentTarget.showPicker?.()}
+                      aria-label="Data di scadenza del prodotto"
+                    />
+                  </div>
+                </label>
+
+                <button
+                  className="primary-button confirmation-submit"
+                  disabled={!selectedPlace}
+                  onClick={() => addProduct(pendingProduct)}
+                >
+                  <Plus />
+                  {selectedPlace ? `Aggiungi in ${selectedPlace}` : "Scegli dove inserirlo"}
+                </button>
+                <p className="estimate-note"><Clock3 /> Le scadenze sono stimate e puoi correggerle in qualsiasi momento.</p>
               </div>
+            ) : (
+              <>
+                <label className="search-field">
+                  <Search />
+                  <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Cerca un prodotto…" autoFocus />
+                  {query && <button onClick={() => setQuery("")} aria-label="Cancella ricerca"><X /></button>}
+                </label>
+
+                <div className="quick-heading">
+                  <div><h3>{query ? "Risultati" : "I tuoi soliti"}</h3><p>Scegli un prodotto, poi indica dove conservarlo.</p></div>
+                  <span>Scadenza stimata</span>
+                </div>
+
+                <div className="quick-grid">
+                  {quickResults.map((product) => {
+                    const exists = products.some((item) => item.name.toLowerCase() === product.name.toLowerCase());
+                    return (
+                      <button className={`quick-card ${exists ? "already" : ""}`} key={product.name} onClick={() => setPendingProduct(product)}>
+                        <ProductIcon product={product} size="small" />
+                        <span>
+                          <strong>{product.name}</strong>
+                          <small>{product.days > 100 ? "Lunga durata" : `Scadenza stimata: ${product.days} giorni`}</small>
+                        </span>
+                        <span className="quick-plus">{exists ? <Check /> : <ChevronRight />}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {query && quickResults.length === 0 && (
+                  <div className="empty-search">
+                    <Search />
+                    <h3>Nessun risultato per “{query}”</h3>
+                    <p>Controlla il nome oppure aggiungilo come nuovo prodotto.</p>
+                    <button className="secondary-button" onClick={() => setPendingProduct({ name: query, days: 3, place: "Frigo", icon: Package, tone: "cream" })}>
+                      <Plus /> Continua
+                    </button>
+                  </div>
+                )}
+              </>
             )}
-            <p className="estimate-note"><Clock3 /> Le scadenze sono stimate e puoi correggerle in qualsiasi momento.</p>
           </section>
         </div>
       )}
@@ -835,14 +1026,18 @@ function App({ currentUser, initialEvents, initialProducts }) {
               <div>
                 <small>Scadenza stimata</small>
                 {editingExpiry ? (
-                  <input
-                    className="expiry-input"
-                    type="date"
-                    value={dateInputValue(selected.expires)}
-                    onChange={(event) => updateExpiry(event.target.value)}
-                    aria-label={`Data di scadenza di ${selected.name}`}
-                    autoFocus
-                  />
+                  <div className="expiry-picker detail-expiry-picker">
+                    <input
+                      className="expiry-input"
+                      type="date"
+                      min={dateInputValue(new Date())}
+                      value={expiryDraft}
+                      onChange={(event) => setExpiryDraft(event.target.value)}
+                      onClick={(event) => event.currentTarget.showPicker?.()}
+                      aria-label={`Data di scadenza di ${selected.name}`}
+                      autoFocus
+                    />
+                  </div>
                 ) : (
                   <strong>{expiryCopy(selected.expires)}</strong>
                 )}
@@ -850,12 +1045,15 @@ function App({ currentUser, initialEvents, initialProducts }) {
               <button
                 onClick={() => {
                   if (editingExpiry) {
-                    setToast({ type: "info", message: `Scadenza di ${selected.name} aggiornata.` });
+                    saveExpiry();
+                  } else {
+                    setExpiryDraft(dateInputValue(selected.expires));
+                    setEditingExpiry(true);
                   }
-                  setEditingExpiry((value) => !value);
                 }}
+                disabled={editingExpiry && !expiryDraft}
               >
-                {editingExpiry ? "Fatto" : "Correggi"}
+                {editingExpiry ? "Salva" : "Correggi"}
               </button>
             </div>
 
@@ -874,7 +1072,7 @@ function App({ currentUser, initialEvents, initialProducts }) {
         <div className="overlay" onMouseDown={(event) => event.target === event.currentTarget && setSelectedRecipe(null)}>
           <article className="recipe-detail-panel" role="dialog" aria-modal="true" aria-labelledby="recipe-title">
             <div className="recipe-detail-image">
-              <img src={selectedRecipe.image} alt={selectedRecipe.imageAlt} />
+              <Image src={selectedRecipe.image} alt={selectedRecipe.imageAlt} fill sizes="(max-width: 680px) 100vw, 620px" />
               <button className="icon-button" onClick={() => setSelectedRecipe(null)} aria-label="Chiudi ricetta"><X /></button>
             </div>
             <div className="recipe-detail-content">
@@ -918,14 +1116,58 @@ function App({ currentUser, initialEvents, initialProducts }) {
             <div className="permission-ok">
               <Bell />
               <div>
-                <strong>Gli avvisi sono attivi</strong>
+                <strong>
+                  {notificationPermission === "granted"
+                    ? "Notifiche del dispositivo attive"
+                    : "Avvisi nell’app attivi"}
+                </strong>
                 <p>
-                  {products.length
-                    ? "Ti avviseremo in base alle scadenze della tua dispensa."
-                    : "Nessun avviso programmato: aggiungi il primo prodotto."}
+                  {notificationPermission === "denied"
+                    ? "Le notifiche di sistema sono bloccate nel browser, ma gli avvisi restano visibili qui."
+                    : notificationPermission === "unsupported"
+                      ? "Questo browser non supporta le notifiche di sistema, ma gli avvisi restano visibili qui."
+                      : products.length
+                        ? `Mostriamo i prodotti in scadenza entro ${alertThreshold} ${alertThreshold === 1 ? "giorno" : "giorni"}.`
+                        : "Nessun avviso programmato: aggiungi il primo prodotto."}
                 </p>
               </div>
             </div>
+            {notificationPermission === "default" && (
+              <button className="secondary-button notification-permission" onClick={enableNotifications}>
+                <Bell /> Attiva notifiche sul dispositivo
+              </button>
+            )}
+            <section className="alerts-section" aria-labelledby="alerts-title">
+              <div className="alerts-heading">
+                <div>
+                  <p className="eyebrow">Scadenze imminenti</p>
+                  <h3 id="alerts-title">I tuoi avvisi</h3>
+                </div>
+                <span>{urgentCount}</span>
+              </div>
+              {alertProducts.length > 0 ? (
+                <div className="alerts-list">
+                  {alertProducts.map((product) => (
+                    <button
+                      key={product.id}
+                      onClick={() => {
+                        setSettingsOpen(false);
+                        openProduct(product);
+                      }}
+                    >
+                      <ProductIcon product={product} size="tiny" />
+                      <span>
+                        <strong>{product.name}</strong>
+                        <small>{product.place} · {expiryCopy(product.expires)}</small>
+                      </span>
+                      <ChevronRight />
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                <p className="alerts-empty">Nessun prodotto scade entro la soglia scelta.</p>
+              )}
+            </section>
             <div className="setting-row"><span><strong>Avvisami prima</strong><small>Soglia predefinita</small></span><select value={alertDays} onChange={(event) => setAlertDays(event.target.value)}><option value="1">1 giorno</option><option value="2">2 giorni</option><option value="3">3 giorni</option></select></div>
             <div className="setting-row"><span><strong>Massimo un avviso</strong><small>Al giorno, per prodotto</small></span><button className={`switch ${dailyLimit ? "on" : ""}`} onClick={() => setDailyLimit((value) => !value)} aria-pressed={dailyLimit} aria-label="Massimo un avviso al giorno"><i /></button></div>
             <div className="setting-row"><span><strong>Non disturbare</strong><small>Dalle 22:30 alle 7:00</small></span><button className={`switch ${quietHours ? "on" : ""}`} onClick={() => setQuietHours((value) => !value)} aria-pressed={quietHours} aria-label="Non disturbare"><i /></button></div>
@@ -975,12 +1217,25 @@ function CookPage({ products, onOpenRecipe }) {
           {availableRecipes.length > 0 ? (
             <div className="recipe-grid">
               {availableRecipes.map((recipe) => (
-                <article className="recipe-card" key={recipe.id}>
+                <article
+                  className="recipe-card"
+                  key={recipe.id}
+                  role="button"
+                  tabIndex={0}
+                  aria-label={`Apri la ricetta ${recipe.title}`}
+                  onClick={() => onOpenRecipe(recipe)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter" || event.key === " ") {
+                      event.preventDefault();
+                      onOpenRecipe(recipe);
+                    }
+                  }}
+                >
                   <div className="recipe-image">
-                    <img src={recipe.image} alt={recipe.imageAlt} />
+                    <Image src={recipe.image} alt={recipe.imageAlt} fill sizes="(max-width: 680px) 100vw, 40vw" />
                     <span><Clock3 /> {recipe.time}</span>
                   </div>
-                  <div className="recipe-copy"><p className="eyebrow">{recipe.note}</p><h3>{recipe.title}</h3><p>{recipe.ingredients}</p><button onClick={() => onOpenRecipe(recipe)}>Apri idea <ChevronRight /></button></div>
+                  <div className="recipe-copy"><p className="eyebrow">{recipe.note}</p><h3>{recipe.title}</h3><p>{recipe.ingredients}</p><span className="recipe-link">Apri idea <ChevronRight /></span></div>
                 </article>
               ))}
             </div>
